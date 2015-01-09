@@ -895,7 +895,25 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         }
 
         if (candidates.isEmpty() ) {
-            final String singleBranch = environment.expand( getSingleBranch(environment) );
+            String singleBranch = environment.expand( getSingleBranch(environment) );
+
+            // Sometimes singleBranch returns null because it cannot use a workspace.
+            // However, with a workspace, sometimes we can determine that branch is
+            // still a singleBranch (for example a SHA-1 hash)
+            if (singleBranch == null && getBranches().size() == 1) {
+                final String branch = getParameterString(getBranches().get(0).getName(), environment);
+
+                // if the branch looks like a SHA1, try to convert it
+                if (branch.matches("[0-9a-f]{6,40}")) {
+                    try {
+                        ObjectId sha1 = git.revParse(branch);
+                        singleBranch = sha1.getName();
+                    } catch (GitException e) {
+                        // revision does not exist, may still be a branch
+                        // for example a branch called "badface" would show up here
+                    }
+                }
+            }
 
             final BuildChooserContext context = new BuildChooserContextImpl(build.getParent(), build, environment);
             candidates = getBuildChooser().getCandidateRevisions(
